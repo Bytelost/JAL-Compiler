@@ -5,7 +5,7 @@ START{ # Second test
     BOOL var3;
 
     var1 = 1;
-    var4 = 0.5;
+    var4 = -0.5;
     
     var2 = DIV(var1, 2);
 

@@ -1,3 +1,5 @@
+import sys
+
 # Token Table
 token_table = [
     ("START", "start"),
@@ -33,7 +35,7 @@ token_table = [
 ]
 
 # Symbol list
-symbols = ['(', ')', '{', '}', ',', ';', '=', '"']
+symbols = ['(', ')', '{', '}', ',', ';', '=']
 
 # Get the contents of the file
 def read_file(filepath):
@@ -76,9 +78,6 @@ def symbol_token(char, token_list, line_num, token_table):
 
 def number_token(count, line, token_list, line_num, token_table):
     
-    # Make the table into a dictionary
-    token_dict = dict(token_table)
-    
     # List o capture characters
     num_list = []
     
@@ -88,16 +87,51 @@ def number_token(count, line, token_list, line_num, token_table):
         count += 1
     number = ''.join(num_list)
     
-    # Put the number on token list
-    token_list.append((number, 'num', line_num))
+    # Check if the number is an float or int
+    if('.' in number):
+        # Put the number on token list
+        token_list.append((number, 'num_float', line_num))
+        
+    else:
+        # Put the number on token list
+        token_list.append((number, 'num_int', line_num))
+    
+    # Return the pointer 
+    return count
+
+def number_token_sin(count, line, token_list, line_num, token_table):
+    
+    # List o capture characters
+    num_list = []
+    
+    # Get the signal
+    num_list.append(line[count])
+    count += 1
+    
+    # Get the number
+    while(line[count].isdigit() or line[count] == '.'):
+        num_list.append(line[count])
+        count += 1
+    number = ''.join(num_list)
+    
+    # Check if the number is an float or int
+    if('.' in number):
+        # Put the number on token list
+        token_list.append((number, 'num_float_sin', line_num))
+        
+    else:
+        # Put the number on token list
+        token_list.append((number, 'num_int_sin', line_num))
     
     # Return the pointer 
     return count
     
+    
 
 def main():
+    file_path = sys.argv[1]
+    code = read_file(file_path)
     tokens = []
-    code = read_file('exemple.j')
     line_num = 1
     
     # Get each line of the code
@@ -123,7 +157,7 @@ def main():
                 while(count < lenght and line[count] != "\n"):
                     count += 1
                 
-            # Check if its a char
+            # Check if its a keyword or variable
             elif(line[count].isalpha()):
                 count = keywords_var(count, line, tokens, line_num, token_table) - 1
             
@@ -134,6 +168,11 @@ def main():
             # Check if its an number
             elif(line[count].isdecimal()):
                 count = number_token(count, line, tokens, line_num, token_table) - 1
+            
+            # Check if its an singnalized number
+            elif(line[count] == '-'):
+                if(line[count + 1].isdecimal()):
+                    count = number_token_sin(count, line, tokens, line_num, token_table) - 1
             
             else:
                 print("Erro encontrado na linha", line_num)
