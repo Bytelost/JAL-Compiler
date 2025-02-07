@@ -1,0 +1,27 @@
+<program_start> ::= start char_esq <code> end ponto-virgula char_dir
+<code> ::= <stmt> <code> | <vazio> | char_dir
+<stmt> ::= <declaration> | <command>
+<declaration> ::= <type> <variable>
+<type> ::= int | float | bool
+<variable> ::= <identifier> ponto-virgula
+<command> ::= <identifier_command> | <control_command> | <io_command> ponto-virgula
+<identifier_command> ::= <identifier> associacao <expression> ponto-virgula
+<control_command> ::= if par_esq <identifier> par_dir char_esq <code> <else>
+                     | while par_esq <identifier> par_dir char_esq <code> 
+                     | for par_esq <identifier> par_dir char_esq <code> 
+                     | else char_esq <code> | vazio
+<else> ::= else char_esq <code> | vazio
+<function> ::= <function_name> par_esq <argument_list> par_dir
+<argument_list> ::= <expression> <argument_tail>
+<argument_tail> ::= virgula <argument_list> | vazio
+<expression> ::= num_int
+               | num_float
+               | nim_sin_int
+               | nim_sin_float
+               | true
+               | false
+               | <identifier> 
+               | <function>
+<identifier> ::= id
+<function_name> ::= high | low | equal | add | sub | div | mul | and | or | not
+<io_command> ::= in par_esq <identifier> par_dir | out par_esq <identifier> par_dir
