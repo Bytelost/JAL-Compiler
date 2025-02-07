@@ -27,23 +27,15 @@ token_table = [
     ("FALSE", "false"),
     ("(", "par_esq"),
     (")", "par_dir"),
-    ("{", "cha_esq"),
-    ("}", "cha_dir"),
+    ("{", "char_esq"),
+    ("}", "char_dir"),
     (",", "virgula"),
     (";", "ponto-virgula"),
-    ("=", "associasao")
+    ("=", "associacao")
 ]
 
 # Symbol list
 symbols = ['(', ')', '{', '}', ',', ';', '=']
-
-# Get the contents of the file
-def read_file(filepath):
-    try:
-        with open(filepath, 'r') as file:
-            return file.readlines()
-    except FileNotFoundError:
-        return None
 
 def keywords_var(count, line, token_list, line_num, token_table):
     
@@ -117,20 +109,18 @@ def number_token_sin(count, line, token_list, line_num, token_table):
     # Check if the number is an float or int
     if('.' in number):
         # Put the number on token list
-        token_list.append((number, 'num_float_sin', line_num))
+        token_list.append((number, 'nim_sin_float', line_num))
         
     else:
         # Put the number on token list
-        token_list.append((number, 'num_int_sin', line_num))
+        token_list.append((number, 'nim_sin_float', line_num))
     
     # Return the pointer 
     return count
     
     
 
-def main():
-    file_path = sys.argv[1]
-    code = read_file(file_path)
+def lexic(code):
     tokens = []
     line_num = 1
     
@@ -182,8 +172,4 @@ def main():
         # Next line
         line_num += 1
     
-    print('\n', tokens)      
-            
-        
-        
-main()
+    return tokens
