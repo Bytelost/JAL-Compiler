@@ -165,7 +165,7 @@ parsing_table = {
 # Define non-terminals
 non_terminals = set(parsing_table.keys())
 
-# Input tokens (from the tuple)
+# Input tokens
 file_path = sys.argv[1]
 code = read_file(file_path)
 input_tokens = lexic(code)
@@ -186,32 +186,28 @@ while len(stack) > 0:
     top = stack[-1]
     current_input = input_terminals[input_pointer]
 
-    print(f"\nCurrent Input: {current_input}")
-    print("Stack:", stack)
-
     if top == current_input:
-        # Match: Pop the stack and move the input pointer
+        
+        # Pop the stack and move the input pointer
         stack.pop()
         input_pointer += 1
-        print(f"Matched: {current_input}")
+        
     elif top in non_terminals:
-        # Non-terminal: Look up the parsing table
+        
+        # Look up the parsing table
         if current_input in parsing_table[top]:
             production = parsing_table[top][current_input]
             stack.pop()
+            
             # Push the production in reverse order
             for symbol in reversed(production):
-                if symbol != "vazio":  # Skip ε productions
+                if symbol != "vazio":  # Skip empty productions
                     stack.append(symbol)
-            print(f"Applied: {top} -> {' '.join(production)}")
         else:
-            print(f"Error: No production for {top} with input {current_input}")
             break
     else:
-        print(f"Error: Unexpected symbol {top} with input {current_input}")
         break
 
-    print("Updated Stack:", stack)
 
 # Check if parsing was successful
 if input_pointer == len(input_terminals) and len(stack) == 0:
