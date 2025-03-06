@@ -14,6 +14,13 @@ class SemanticAnalyzer:
             ('bool', 'int'): 'int',
             ('bool', 'float'): 'float'
         }
+        self.function_signatures = {
+            'add': {'params': ['num', 'num'], 'return': 'num'},
+            'sub': {'params': ['num', 'num'], 'return': 'num'},
+            'mul': {'params': ['num', 'num'], 'return': 'num'},
+            'low': {'params': ['num', 'num'], 'return': 'num'},
+            'high': {'params': ['num', 'num'], 'return': 'num'}
+        }
 
     def enter_scope(self):
         self.symbol_table.append({})
@@ -62,6 +69,94 @@ class SemanticAnalyzer:
 
         print(f"Type Error (Line {line}): Incompatible types {source_type}->{target_type}")
         return False
+    
+    def check_function_call(self, func_name, args, line):
+        """Validate function arguments and return type"""
+        if func_name not in self.function_signatures:
+            print(f"Semantic Error (Line {line}): Undefined function '{func_name}'")
+            return None
+
+        expected_params = self.function_signatures[func_name]['params']
+        return_type = self.function_signatures[func_name]['return']
+
+        # Validate argument count
+        if len(args) != len(expected_params):
+            print(f"Semantic Error (Line {line}): {func_name} expects {len(expected_params)} arguments, got {len(args)}")
+            return None
+
+        # Validate argument types
+        arg_types = []
+        for arg, expected in zip(args, expected_params):
+            arg_type = self._get_expression_type(arg, line)
+            if not arg_type:
+                return None
+                
+            if expected == 'num' and arg_type not in ['int', 'float']:
+                print(f"Type Error (Line {line}): {func_name} requires numeric arguments")
+                return None
+                
+            arg_types.append(arg_type)
+
+        # Determine return type
+        if return_type == 'num':
+            if 'float' in arg_types:
+                return 'float'
+            return 'int'
+            
+        return return_type
+
+    def check_control_structure(self, ctype, condition, line):
+        """Validate control structure conditions"""
+        cond_type = self._get_expression_type(condition, line)
+        
+        if ctype in ['while', 'if']:
+            if cond_type != 'bool':
+                print(f"Type Error (Line {line}): {ctype.upper()} condition must be boolean")
+                
+        elif ctype == 'for':
+            if cond_type != 'int':
+                print(f"Type Error (Line {line}): FOR loop requires integer conditions")
+
+    def check_io_operation(self, op_type, arg, line):
+        """Validate IN/OUT operations"""
+        arg_type = self._get_expression_type(arg, line)
+        
+        if op_type == 'in':
+            if not isinstance(arg, str):
+                print(f"Semantic Error (Line {line}): IN operation requires variable reference")
+                
+        if arg_type not in ['int', 'float']:
+            print(f"Type Error (Line {line}): {op_type.upper()} operation requires numeric type")
+
+    def _get_expression_type(self, expr, line):
+        """Determine expression type with type propagation"""
+        if isinstance(expr, tuple):
+            # Handle function calls
+            if expr[0] == 'function':
+                return self.check_function_call(expr[1], expr[2], line)
+                
+            # Handle binary operations
+            elif expr[0] == 'binop':
+                left_type = self._get_expression_type(expr[1], line)
+                right_type = self._get_expression_type(expr[2], line)
+                
+                if left_type == right_type:
+                    return left_type
+                elif 'float' in [left_type, right_type]:
+                    return 'float'
+                else:
+                    print(f"Type Error (Line {line}): Operation between {left_type} and {right_type}")
+                    return None
+                    
+        # Handle literals and variables
+        elif isinstance(expr, (int, float)):
+            return 'int' if isinstance(expr, int) else 'float'
+            
+        elif isinstance(expr, str):
+            var_type = self.lookup_variable(expr, line)
+            return var_type
+            
+        return None
 
 def read_file(filepath):
     try:
