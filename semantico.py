@@ -22,6 +22,16 @@ class SemanticAnalyzer:
             'high': {'params': ['num', 'num'], 'return': 'num'}
         }
         self.loop_counters = []
+        self.generated_code = []
+        self.type_mapping = {    
+            'int': 'i32',
+            'float': 'f64',
+            'bool': 'bool'
+        }
+        self.expression_type_stack = []
+        self.expression_value_stack = []
+        self.current_assignment_var = None
+        self.pending_assignment = None
 
     def enter_scope(self):
         self.symbol_table.append({})
@@ -40,6 +50,7 @@ class SemanticAnalyzer:
             return False
             
         self.symbol_table[self.current_scope][name] = var_type.lower()
+        self.generated_code.append(f"{name}: {self.type_mapping[var_type.lower()]}")
         print(f"Declared '{name}' as {var_type.upper()} (Line {line})")
         return True
 
@@ -380,32 +391,62 @@ while len(stack) > 0:
         # Handle semantic actions
         if top in ['int', 'float', 'bool']:
             analyzer.current_decl_type = lexeme
-        elif top == 'id':
-            if analyzer.current_decl_type:  # Declaration
-                if analyzer.declare_variable(lexeme, analyzer.current_decl_type, line):
-                    print(f"Declared '{lexeme}' as {analyzer.current_decl_type} (Line {line})")
+        if top == 'id':
+            if analyzer.current_decl_type:  # Variable declaration
+                analyzer.declare_variable(lexeme, analyzer.current_decl_type, line)
                 analyzer.current_decl_type = None
-            else:  # Usage
-                var_type = analyzer.lookup_variable(lexeme, line)
-                if var_type:
-                    expression_type_stack.append(var_type)
-        elif top == 'char_esq':
-            analyzer.enter_scope()
-            print(f"Entered new scope (Line {line})")
-        elif top == 'char_dir':
-            analyzer.exit_scope()
-            print(f"Exited scope (Line {line})")
+            else:  # Variable usage
+                # Track potential assignment target
+                analyzer.pending_assignment = (lexeme, line)
+        elif top in ['num_int', 'num_float', 'nim_sin_int', 'nim_sin_float', 'true', 'false']:
+            # Handle literals
+            if top == 'num_int':
+                value = int(lexeme)
+                analyzer.expression_type_stack.append('int')
+            elif top == 'num_float':
+                value = float(lexeme.replace(',', '.'))
+                analyzer.expression_type_stack.append('float')
+            elif top == 'nim_sin_int':
+                value = -int(lexeme[1:])
+                analyzer.expression_type_stack.append('int')
+            elif top == 'nim_sin_float':
+                value = -float(lexeme[1:].replace(',', '.'))
+                analyzer.expression_type_stack.append('float')
+            elif top == 'true':
+                value = True
+                analyzer.expression_type_stack.append('bool')
+            elif top == 'false':
+                value = False
+                analyzer.expression_type_stack.append('bool')
+            analyzer.expression_value_stack.append(value)
         elif top == 'associacao':
-            # Get last two types from expression stack (identifier and value)
-            if len(expression_type_stack) >= 2:
-                target_type = expression_type_stack[-2]
-                value_type = expression_type_stack[-1]
-                analyzer.check_type_compatibility(target_type, value_type, line, is_assignment=True)
-                expression_type_stack = expression_type_stack[:-2] + [target_type]
+            pass
+        elif top == 'ponto-virgula':
+            # Generate code for completed assignments
+            if analyzer.pending_assignment and analyzer.expression_value_stack:
+                var_name, line_num = analyzer.pending_assignment
+                value = analyzer.expression_value_stack.pop()
+                var_type = analyzer.lookup_variable(var_name, line_num)
+                
+                if var_type:
+                    # Format value
+                    if var_type == 'float':
+                        value_str = f"{value:.2f}".replace('.', ',')
+                    elif var_type == 'bool':
+                        value_str = 'true' if value else 'false'
+                    else:
+                        value_str = str(value)
+                    
+                    # Generate ETAC code with semicolon
+                    etac_type = analyzer.type_mapping[var_type]
+                    analyzer.generated_code.append(
+                        f"{var_name}: {etac_type} = {value_str};"
+                    )
+                analyzer.pending_assignment = None
 
         stack.pop()
         input_pointer += 1
-
+        
     elif top in non_terminals:
         if current_input_type in parsing_table[top]:
             production = parsing_table[top][current_input_type]
@@ -425,3 +466,6 @@ while len(stack) > 0:
     else:
         print(f"Syntax Error (Line {line}): Unexpected token '{lexeme}'")
         break
+
+print("\nGenerated ETAC Code:")
+print('\n'.join(analyzer.generated_code))  
