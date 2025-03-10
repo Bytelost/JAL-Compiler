@@ -22,6 +22,11 @@ START{
         var4 = -0.5;
     }
 
+    FOR(var2){
+        var1 = 1;
+        var4 = -0.5;
+    }
+
     WHILE(var3){
         var1 = 1;
         var4 = -0.5;

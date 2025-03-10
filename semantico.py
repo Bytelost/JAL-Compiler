@@ -21,6 +21,7 @@ class SemanticAnalyzer:
             'low': {'params': ['num', 'num'], 'return': 'num'},
             'high': {'params': ['num', 'num'], 'return': 'num'}
         }
+        self.loop_counters = []
 
     def enter_scope(self):
         self.symbol_table.append({})
@@ -157,6 +158,42 @@ class SemanticAnalyzer:
             return var_type
             
         return None
+    
+    def check_control_structure(self, ctype, node, line):
+        """Validate control structures"""
+        if ctype == 'for':
+            # FOR should have pattern: FOR (int_iterations)
+            if not isinstance(node, (int, str)):
+                print(f"Syntax Error (Line {line}): Invalid FOR structure")
+                return
+
+            # Check iteration count type
+            iter_type = self._get_expression_type(node, line)
+            
+            if isinstance(node, str):
+                # Variable case - must be declared as int
+                var_info = self.lookup_variable(node, line)
+                if not var_info or var_info['type'] != 'int':
+                    print(f"Type Error (Line {line}): FOR loop counter must be integer variable")
+                else:
+                    self.loop_counters.append(node)
+            elif isinstance(node, int):
+                # Literal case - must be positive integer
+                if node <= 0:
+                    print(f"Semantic Warning (Line {line}): FOR loop with non-positive iterations")
+            else:
+                print(f"Type Error (Line {line}): FOR requires integer iteration count")
+
+        elif ctype in ['while', 'if']:
+            # Existing boolean check
+            cond_type = self._get_expression_type(node, line)
+            if cond_type != 'bool':
+                print(f"Type Error (Line {line}): {ctype.upper()} condition must be boolean")
+
+    def _validate_for_operation(self, var_name, line):
+        """Check variables modified inside FOR loops"""
+        if var_name in self.loop_counters:
+            print(f"Semantic Error (Line {line}): Modification of FOR loop counter '{var_name}'")
 
 def read_file(filepath):
     try:
