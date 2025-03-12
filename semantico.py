@@ -164,7 +164,8 @@ parsing_table = {
 class SemanticAnalyzer:
     FUNCTION_ARG_COUNTS = {
         'ADD': 2, 'SUB': 2, 'MUL': 2, 'DIV': 2,
-        'AND': 2, 'OR': 2, 'NOT': 1
+        'AND': 2, 'OR': 2, 'NOT': 1,
+        'HIGH': 2, 'LOW': 2, 'EQUAL': 2
     }
 
     def __init__(self):
@@ -198,23 +199,26 @@ class SemanticAnalyzer:
             for arg_type in arg_types:
                 if arg_type not in ['int', 'float']:
                     raise Exception(f"Function {function_name} requires numeric arguments, got {arg_type}")
-            # Determine return type for math functions
             return 'float' if 'float' in arg_types else 'int'
+        
         elif function_name in ['AND', 'OR', 'NOT']:
             for arg_type in arg_types:
                 if arg_type != 'bool':
                     raise Exception(f"Function {function_name} requires boolean arguments, got {arg_type}")
+            return 'bool'
+        
+        elif function_name in ['HIGH', 'LOW', 'EQUAL']:
+            for arg_type in arg_types:
+                if arg_type not in ['int', 'float']:
+                    raise Exception(f"Function {function_name} requires numeric arguments, got {arg_type}")
             return 'bool'
 
     def check_conversion(self, target_type, source_info):
         source_type, is_source_var = source_info
         if source_type == target_type:
             return
-        
-        # Only allow int <-> float conversions between variables
         if is_source_var and {source_type, target_type} == {'int', 'float'}:
             return
-            
         raise Exception(f"Cannot convert {source_type} to {target_type}")
 
 
@@ -281,13 +285,13 @@ def parse(input_tokens):
                 analyzer.type_stack.append(('float', False))
             elif top in ['true', 'false']:
                 analyzer.type_stack.append(('bool', False))
-            elif top in ['add', 'sub', 'mul', 'div', 'and', 'or', 'not']:
+            elif top in ['add', 'sub', 'mul', 'div', 'and', 'or', 'not', 'high', 'low', 'equal']:
                 analyzer.function_stack.append(top.upper())
 
             # Handle function returns
             if top == 'par_dir' and analyzer.function_stack:
                 function_name = analyzer.function_stack.pop()
-                expected_args = SemanticAnalyzer.FUNCTION_ARG_COUNTS[function_name]
+                expected_args = SemanticAnalyzer.FUNCTION_ARG_COUNTS.get(function_name, 0)
                 args = []
                 for _ in range(expected_args):
                     if not analyzer.type_stack:
