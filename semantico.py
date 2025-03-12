@@ -171,10 +171,14 @@ class SemanticAnalyzer:
     def __init__(self):
         self.scope_stack = [{}]
         self.current_decl_type = None
-        self.type_stack = []  # Stores (type, is_variable) tuples
+        self.type_stack = []                # Stores (type, is_variable) tuples
         self.function_stack = []
         self.assignment_target = None
         self.in_assignment = False
+        self.control_stack = []             # Track loop/control structures
+        self.in_loop_init = False           # For FOR loop variable checking
+        self.expecting_control_condition = False
+
 
     def enter_scope(self):
         self.scope_stack.append({})
@@ -220,6 +224,22 @@ class SemanticAnalyzer:
         if is_source_var and {source_type, target_type} == {'int', 'float'}:
             return
         raise Exception(f"Cannot convert {source_type} to {target_type}")
+    
+    def validate_loop_condition(self, var_name, loop_type):
+        var_type = self.get_variable_type(var_name)
+        
+        if loop_type == 'while':
+            if var_type != 'bool':
+                raise Exception(f"WHILE loop requires boolean variable, got {var_type}")
+            
+    def validate_loop_variable(self, var_name):
+        var_type = self.get_variable_type(var_name)
+        if var_type != 'int':
+            raise Exception(f"FOR loop requires INT variable, got {var_type}")
+            
+    def check_loop_expression(self, expr_type, loop_type):
+        if loop_type == 'for' and expr_type != 'int':
+            raise Exception(f"FOR loop requires integer expressions, got {expr_type}")
 
 
 # Define non-terminals
@@ -253,6 +273,35 @@ def parse(input_tokens):
 
         # Terminal handling
         if top == current_input:
+            
+            # Track loop types
+            if top == 'while':
+                analyzer.control_stack.append('while')
+                analyzer.expecting_control_condition = True
+                
+            elif top == 'for':
+                analyzer.control_stack.append('for')
+                analyzer.in_loop_init = True
+                
+            elif top == 'id' and analyzer.control_stack:
+                current_loop = analyzer.control_stack[-1]
+                    
+                # Loop condition validation
+                if analyzer.expecting_control_condition:
+                    analyzer.validate_loop_condition(current_lexeme, current_loop)
+                    analyzer.expecting_control_condition = False
+                    
+            elif top == 'id' and analyzer.in_loop_init:
+                analyzer.validate_loop_variable(current_lexeme)
+                analyzer.in_loop_init = False
+
+            # Handle FOR loop range expressions
+            elif top in ['num_int', 'nim_sin_int'] and analyzer.control_stack == 'for':
+                analyzer.type_stack.append('int')
+                
+            elif top in ['num_float', 'nim_sin_float'] and analyzer.control_stack == 'for':
+                raise Exception("FOR loop range requires integer values")
+            
             # Semantic actions
             if top == 'char_esq':
                 analyzer.enter_scope()
@@ -315,6 +364,13 @@ def parse(input_tokens):
             for symbol in reversed(production):
                 if symbol != 'vazio':
                     stack.append(symbol)
+                    
+        # Non-terminal handling for loop ranges
+        elif top == 'loop_range':
+            # Validate all range components are integers
+            while len(analyzer.type_stack) > 0:
+                expr_type = analyzer.type_stack.pop()
+                analyzer.check_loop_expression(expr_type, 'for')
 
         # Error case
         else:
