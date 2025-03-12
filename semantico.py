@@ -1,211 +1,7 @@
 from lexico import lexic
 import sys
 
-class SemanticAnalyzer:
-    def __init__(self):
-        self.symbol_table = [{}]  # Stack of scopes
-        self.current_scope = 0
-        self.current_decl_type = None
-        self.type_conversions = {
-            ('int', 'float'): 'float',
-            ('float', 'int'): 'float',
-            ('int', 'bool'): 'bool',
-            ('float', 'bool'): 'bool',
-            ('bool', 'int'): 'int',
-            ('bool', 'float'): 'float'
-        }
-        self.function_signatures = {
-            'add': {'params': ['num', 'num'], 'return': 'num'},
-            'sub': {'params': ['num', 'num'], 'return': 'num'},
-            'mul': {'params': ['num', 'num'], 'return': 'num'},
-            'low': {'params': ['num', 'num'], 'return': 'num'},
-            'high': {'params': ['num', 'num'], 'return': 'num'}
-        }
-        self.loop_counters = []
-        self.generated_code = []
-        self.type_mapping = {    
-            'int': 'i32',
-            'float': 'f64',
-            'bool': 'bool'
-        }
-        self.expression_type_stack = []
-        self.expression_value_stack = []
-        self.current_assignment_var = None
-        self.pending_assignment = None
-
-    def enter_scope(self):
-        self.symbol_table.append({})
-        self.current_scope += 1
-        print(f"Entered new scope (Line {self.current_scope})")
-
-    def exit_scope(self):
-        if self.current_scope > 0:
-            self.symbol_table.pop()
-            self.current_scope -= 1
-            print(f"Exited scope (Line {self.current_scope})")
-
-    def declare_variable(self, name, var_type, line):
-        if name in self.symbol_table[self.current_scope]:
-            print(f"Semantic Error (Line {line}): Redeclaration of '{name}'")
-            return False
-            
-        self.symbol_table[self.current_scope][name] = var_type.lower()
-        self.generated_code.append(f"{name}: {self.type_mapping[var_type.lower()]}")
-        print(f"Declared '{name}' as {var_type.upper()} (Line {line})")
-        return True
-
-    def lookup_variable(self, name, line):
-        """NEW METHOD: Check variable existence in current and parent scopes"""
-        for i in range(self.current_scope, -1, -1):
-            if name in self.symbol_table[i]:
-                return self.symbol_table[i][name]
-        print(f"Semantic Error (Line {line}): Undeclared variable '{name}'")
-        return None
-
-    def check_type_compatibility(self, target_type, source_type, line, is_assignment=False):
-        target_type = target_type.lower()
-        source_type = source_type.lower()
-
-        if target_type == source_type:
-            return True
-
-        # Handle numeric to bool conversions
-        if target_type == 'bool' and source_type in ['int', 'float']:
-            print(f"Type Warning (Line {line}): Implicit conversion from {source_type} to bool")
-            return True
-
-        if (source_type, target_type) in self.type_conversions:
-            if is_assignment and source_type == 'float' and target_type == 'int':
-                print(f"Type Warning (Line {line}): Possible precision loss in float->int conversion")
-            return True
-
-        print(f"Type Error (Line {line}): Incompatible types {source_type}->{target_type}")
-        return False
-    
-    def check_function_call(self, func_name, args, line):
-        """Validate function arguments and return type"""
-        if func_name not in self.function_signatures:
-            print(f"Semantic Error (Line {line}): Undefined function '{func_name}'")
-            return None
-
-        expected_params = self.function_signatures[func_name]['params']
-        return_type = self.function_signatures[func_name]['return']
-
-        # Validate argument count
-        if len(args) != len(expected_params):
-            print(f"Semantic Error (Line {line}): {func_name} expects {len(expected_params)} arguments, got {len(args)}")
-            return None
-
-        # Validate argument types
-        arg_types = []
-        for arg, expected in zip(args, expected_params):
-            arg_type = self._get_expression_type(arg, line)
-            if not arg_type:
-                return None
-                
-            if expected == 'num' and arg_type not in ['int', 'float']:
-                print(f"Type Error (Line {line}): {func_name} requires numeric arguments")
-                return None
-                
-            arg_types.append(arg_type)
-
-        # Determine return type
-        if return_type == 'num':
-            if 'float' in arg_types:
-                return 'float'
-            return 'int'
-            
-        return return_type
-
-    def check_control_structure(self, ctype, condition, line):
-        """Validate control structure conditions"""
-        cond_type = self._get_expression_type(condition, line)
-        
-        if ctype in ['while', 'if']:
-            if cond_type != 'bool':
-                print(f"Type Error (Line {line}): {ctype.upper()} condition must be boolean")
-                
-        elif ctype == 'for':
-            if cond_type != 'int':
-                print(f"Type Error (Line {line}): FOR loop requires integer conditions")
-
-    def check_io_operation(self, op_type, arg, line):
-        """Validate IN/OUT operations"""
-        arg_type = self._get_expression_type(arg, line)
-        
-        if op_type == 'in':
-            if not isinstance(arg, str):
-                print(f"Semantic Error (Line {line}): IN operation requires variable reference")
-                
-        if arg_type not in ['int', 'float']:
-            print(f"Type Error (Line {line}): {op_type.upper()} operation requires numeric type")
-
-    def _get_expression_type(self, expr, line):
-        """Determine expression type with type propagation"""
-        if isinstance(expr, tuple):
-            # Handle function calls
-            if expr[0] == 'function':
-                return self.check_function_call(expr[1], expr[2], line)
-                
-            # Handle binary operations
-            elif expr[0] == 'binop':
-                left_type = self._get_expression_type(expr[1], line)
-                right_type = self._get_expression_type(expr[2], line)
-                
-                if left_type == right_type:
-                    return left_type
-                elif 'float' in [left_type, right_type]:
-                    return 'float'
-                else:
-                    print(f"Type Error (Line {line}): Operation between {left_type} and {right_type}")
-                    return None
-                    
-        # Handle literals and variables
-        elif isinstance(expr, (int, float)):
-            return 'int' if isinstance(expr, int) else 'float'
-            
-        elif isinstance(expr, str):
-            var_type = self.lookup_variable(expr, line)
-            return var_type
-            
-        return None
-    
-    def check_control_structure(self, ctype, node, line):
-        """Validate control structures"""
-        if ctype == 'for':
-            # FOR should have pattern: FOR (int_iterations)
-            if not isinstance(node, (int, str)):
-                print(f"Syntax Error (Line {line}): Invalid FOR structure")
-                return
-
-            # Check iteration count type
-            iter_type = self._get_expression_type(node, line)
-            
-            if isinstance(node, str):
-                # Variable case - must be declared as int
-                var_info = self.lookup_variable(node, line)
-                if not var_info or var_info['type'] != 'int':
-                    print(f"Type Error (Line {line}): FOR loop counter must be integer variable")
-                else:
-                    self.loop_counters.append(node)
-            elif isinstance(node, int):
-                # Literal case - must be positive integer
-                if node <= 0:
-                    print(f"Semantic Warning (Line {line}): FOR loop with non-positive iterations")
-            else:
-                print(f"Type Error (Line {line}): FOR requires integer iteration count")
-
-        elif ctype in ['while', 'if']:
-            # Existing boolean check
-            cond_type = self._get_expression_type(node, line)
-            if cond_type != 'bool':
-                print(f"Type Error (Line {line}): {ctype.upper()} condition must be boolean")
-
-    def _validate_for_operation(self, var_name, line):
-        """Check variables modified inside FOR loops"""
-        if var_name in self.loop_counters:
-            print(f"Semantic Error (Line {line}): Modification of FOR loop counter '{var_name}'")
-
+# Get the contents of the file
 def read_file(filepath):
     try:
         with open(filepath, 'r') as file:
@@ -213,6 +9,7 @@ def read_file(filepath):
     except FileNotFoundError:
         return None
 
+# Define the parsing table (from the previous step)
 parsing_table = {
     'program_start': {
         'start': ['start', 'char_esq', 'code', 'end', 'ponto-virgula', 'char_dir']
@@ -364,108 +161,177 @@ parsing_table = {
     }
 }
 
+class SemanticAnalyzer:
+    FUNCTION_ARG_COUNTS = {
+        'ADD': 2, 'SUB': 2, 'MUL': 2, 'DIV': 2,
+        'AND': 2, 'OR': 2, 'NOT': 1
+    }
+
+    def __init__(self):
+        self.scope_stack = [{}]
+        self.current_decl_type = None
+        self.type_stack = []  # Stores (type, is_variable) tuples
+        self.function_stack = []
+        self.assignment_target = None
+        self.in_assignment = False
+
+    def enter_scope(self):
+        self.scope_stack.append({})
+
+    def exit_scope(self):
+        if len(self.scope_stack) > 1:
+            self.scope_stack.pop()
+
+    def declare_variable(self, name, var_type):
+        if name in self.scope_stack[-1]:
+            raise Exception(f"Variable '{name}' already declared")
+        self.scope_stack[-1][name] = var_type
+
+    def get_variable_type(self, name):
+        for scope in reversed(self.scope_stack):
+            if name in scope:
+                return scope[name]
+        raise Exception(f"Undefined variable '{name}'")
+
+    def check_function_args(self, function_name, arg_types):
+        if function_name in ['ADD', 'SUB', 'MUL', 'DIV']:
+            for arg_type in arg_types:
+                if arg_type not in ['int', 'float']:
+                    raise Exception(f"Function {function_name} requires numeric arguments, got {arg_type}")
+            # Determine return type for math functions
+            return 'float' if 'float' in arg_types else 'int'
+        elif function_name in ['AND', 'OR', 'NOT']:
+            for arg_type in arg_types:
+                if arg_type != 'bool':
+                    raise Exception(f"Function {function_name} requires boolean arguments, got {arg_type}")
+            return 'bool'
+
+    def check_conversion(self, target_type, source_info):
+        source_type, is_source_var = source_info
+        if source_type == target_type:
+            return
+        
+        # Only allow int <-> float conversions between variables
+        if is_source_var and {source_type, target_type} == {'int', 'float'}:
+            return
+            
+        raise Exception(f"Cannot convert {source_type} to {target_type}")
+
+
 # Define non-terminals
 non_terminals = set(parsing_table.keys())
 
-# Initialize analyzer and parse
+# Input tokens
 file_path = sys.argv[1]
 code = read_file(file_path)
 input_tokens = lexic(code)
-input_tokens.append(('$', '$', -1))
 
-analyzer = SemanticAnalyzer()
+# Extract the terminals from the input tokens
+input_terminals = [token[1] for token in input_tokens] + ["$"]  # Add end marker
+
+# Initialize the stack
 stack = ["$", "program_start"]
+
+# Initialize the input pointer
 input_pointer = 0
 
-# Track expression types for semantic checks
-expression_type_stack = []
+# LL(1) Parsing Algorithm
+def parse(input_tokens):
+    input_terminals = [token[1] for token in input_tokens] + ["$"]
+    input_pointer = 0
+    stack = ["$", "program_start"]
+    analyzer = SemanticAnalyzer()
 
-while len(stack) > 0:
-    top = stack[-1]
-    current_token = input_tokens[input_pointer]
-    current_input_type = current_token[1]
-    lexeme = current_token[0]
-    line = current_token[2]
+    while stack:
+        top = stack[-1]
+        current_input = input_terminals[input_pointer] if input_pointer < len(input_terminals) else "$"
+        current_lexeme = input_tokens[input_pointer][0] if input_pointer < len(input_tokens) else None
 
-    if top == current_input_type:
-        # Handle semantic actions
-        if top in ['int', 'float', 'bool']:
-            analyzer.current_decl_type = lexeme
-        if top == 'id':
-            if analyzer.current_decl_type:  # Variable declaration
-                analyzer.declare_variable(lexeme, analyzer.current_decl_type, line)
-                analyzer.current_decl_type = None
-            else:  # Variable usage
-                # Track potential assignment target
-                analyzer.pending_assignment = (lexeme, line)
-        elif top in ['num_int', 'num_float', 'nim_sin_int', 'nim_sin_float', 'true', 'false']:
-            # Handle literals
-            if top == 'num_int':
-                value = int(lexeme)
-                analyzer.expression_type_stack.append('int')
-            elif top == 'num_float':
-                value = float(lexeme.replace(',', '.'))
-                analyzer.expression_type_stack.append('float')
-            elif top == 'nim_sin_int':
-                value = -int(lexeme[1:])
-                analyzer.expression_type_stack.append('int')
-            elif top == 'nim_sin_float':
-                value = -float(lexeme[1:].replace(',', '.'))
-                analyzer.expression_type_stack.append('float')
-            elif top == 'true':
-                value = True
-                analyzer.expression_type_stack.append('bool')
-            elif top == 'false':
-                value = False
-                analyzer.expression_type_stack.append('bool')
-            analyzer.expression_value_stack.append(value)
-        elif top == 'associacao':
-            pass
-        elif top == 'ponto-virgula':
-            # Generate code for completed assignments
-            if analyzer.pending_assignment and analyzer.expression_value_stack:
-                var_name, line_num = analyzer.pending_assignment
-                value = analyzer.expression_value_stack.pop()
-                var_type = analyzer.lookup_variable(var_name, line_num)
-                
-                if var_type:
-                    # Format value
-                    if var_type == 'float':
-                        value_str = f"{value:.2f}".replace('.', ',')
-                    elif var_type == 'bool':
-                        value_str = 'true' if value else 'false'
-                    else:
-                        value_str = str(value)
-                    
-                    # Generate ETAC code with semicolon
-                    etac_type = analyzer.type_mapping[var_type]
-                    analyzer.generated_code.append(
-                        f"{var_name}: {etac_type} = {value_str};"
-                    )
-                analyzer.pending_assignment = None
+        # Terminal handling
+        if top == current_input:
+            # Semantic actions
+            if top == 'char_esq':
+                analyzer.enter_scope()
+            elif top == 'char_dir':
+                analyzer.exit_scope()
+            elif top in ['int', 'float', 'bool']:
+                analyzer.current_decl_type = top
+            elif top == 'id':
+                if analyzer.current_decl_type:
+                    analyzer.declare_variable(current_lexeme, analyzer.current_decl_type)
+                    analyzer.current_decl_type = None
+                else:
+                    var_type = analyzer.get_variable_type(current_lexeme)
+                    analyzer.type_stack.append((var_type, True))
+            elif top == 'associacao':
+                analyzer.in_assignment = True
+                analyzer.assignment_target = None
+                if analyzer.type_stack:
+                    analyzer.assignment_target = analyzer.type_stack.pop()
+            elif top == 'ponto-virgula':
+                if analyzer.in_assignment and analyzer.assignment_target:
+                    if analyzer.type_stack:
+                        source_info = analyzer.type_stack.pop()
+                        target_type, _ = analyzer.assignment_target
+                        analyzer.check_conversion(target_type, source_info)
+                    analyzer.in_assignment = False
+            elif top in ['num_int', 'nim_sin_int']:
+                analyzer.type_stack.append(('int', False))
+            elif top in ['num_float', 'nim_sin_float']:
+                analyzer.type_stack.append(('float', False))
+            elif top in ['true', 'false']:
+                analyzer.type_stack.append(('bool', False))
+            elif top in ['add', 'sub', 'mul', 'div', 'and', 'or', 'not']:
+                analyzer.function_stack.append(top.upper())
 
-        stack.pop()
-        input_pointer += 1
-        
-    elif top in non_terminals:
-        if current_input_type in parsing_table[top]:
-            production = parsing_table[top][current_input_type]
+            # Handle function returns
+            if top == 'par_dir' and analyzer.function_stack:
+                function_name = analyzer.function_stack.pop()
+                expected_args = SemanticAnalyzer.FUNCTION_ARG_COUNTS[function_name]
+                args = []
+                for _ in range(expected_args):
+                    if not analyzer.type_stack:
+                        raise Exception(f"Not enough arguments for {function_name}")
+                    arg_type, _ = analyzer.type_stack.pop()
+                    args.append(arg_type)
+                args.reverse()
+                return_type = analyzer.check_function_args(function_name, args)
+                analyzer.type_stack.append((return_type, False))
+
+            # Stack operations
+            stack.pop()
+            input_pointer += 1
+
+        # Non-terminal handling
+        elif top in parsing_table:
+            production = parsing_table[top].get(current_input, None)
+            if not production:
+                raise Exception(f"Syntax error: Unexpected {current_input}")
             stack.pop()
             for symbol in reversed(production):
-                if symbol != "vazio":
+                if symbol != 'vazio':
                     stack.append(symbol)
-            
-            # Handle expression type propagation
-            if top == 'expression':
-                if len(expression_type_stack) >= 1:
-                    expr_type = expression_type_stack.pop()
-                    expression_type_stack.append(expr_type)
-        else:
-            print(f"Syntax Error (Line {line}): Unexpected token '{lexeme}'")
-            break
-    else:
-        print(f"Syntax Error (Line {line}): Unexpected token '{lexeme}'")
-        break
 
-print("\nGenerated ETAC Code:")
-print('\n'.join(analyzer.generated_code))  
+        # Error case
+        else:
+            raise Exception(f"Syntax error: Unexpected {current_input}")
+
+    # Final validation
+    if input_pointer == len(input_terminals) and not stack:
+        print("Compilation successful!")
+    else:
+        print("Compilation failed")
+        
+# Main execution
+if __name__ == "__main__":
+    file_path = sys.argv[1]
+    code = read_file(file_path)
+    if not code:
+        print("File not found")
+        sys.exit(1)
+    input_tokens = lexic(code)
+    try:
+        parse(input_tokens)
+    except Exception as e:
+        print(f"Semantic Error: {e}")
+        sys.exit(1)
