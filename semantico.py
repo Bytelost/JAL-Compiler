@@ -178,7 +178,8 @@ class SemanticAnalyzer:
         self.control_stack = []             # Track loop/control structures
         self.in_loop_init = False           # For FOR loop variable checking
         self.expecting_control_condition = False
-
+        self.expecting_if_condition = False
+        self.control_stack_if_else = []
 
     def enter_scope(self):
         self.scope_stack.append({})
@@ -240,7 +241,20 @@ class SemanticAnalyzer:
     def check_loop_expression(self, expr_type, loop_type):
         if loop_type == 'for' and expr_type != 'int':
             raise Exception(f"FOR loop requires integer expressions, got {expr_type}")
+        
+    def validate_if_condition(self, var_name):
+        var_type = self.get_variable_type(var_name)
+        if var_type != 'bool':
+            raise Exception(f"IF statement requires bool variable, got {var_type}")
 
+    def validate_control_structure(self, current_token):
+        if current_token == 'if':
+            self.control_stack_if_else.append('if')
+        elif current_token == 'else':
+            if not self.control_stack_if_else or self.control_stack_if_else[-1] != 'if':
+                raise Exception("ELSE without matching IF")
+            # Replace if with else in stack to prevent multiple else
+            self.control_stack_if_else[-1] = 'else'
 
 # Define non-terminals
 non_terminals = set(parsing_table.keys())
@@ -302,11 +316,24 @@ def parse(input_tokens):
             elif top in ['num_float', 'nim_sin_float'] and analyzer.control_stack == 'for':
                 raise Exception("FOR loop range requires integer values")
             
-            # Semantic actions
+            # Semantic action for if/else
+            elif top == 'if':
+                analyzer.validate_control_structure('if')
+                analyzer.expecting_if_condition = True
+            elif top == 'else':
+                analyzer.validate_control_structure('else')
+                
+            if top == 'id' and analyzer.expecting_if_condition:
+                analyzer.validate_if_condition(current_lexeme)
+                analyzer.expecting_if_condition = False
+            
+            # Semantic actions for scopes
             if top == 'char_esq':
                 analyzer.enter_scope()
             elif top == 'char_dir':
                 analyzer.exit_scope()
+                if analyzer.control_stack and analyzer.control_stack[-1] == 'else':
+                    analyzer.control_stack.pop()
             elif top in ['int', 'float', 'bool']:
                 analyzer.current_decl_type = top
             elif top == 'id':
