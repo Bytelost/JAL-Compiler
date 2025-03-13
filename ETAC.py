@@ -280,11 +280,17 @@ class SemanticAnalyzer:
             
             if function_name == 'NOT':
                 # Unary operator formatting
-                self.etac_code.append(f"{temp_var} = {operator} {arg_values[0]}")
+                self.etac_code.append(f"{temp_var}: bool = {operator} {arg_values[0]}")
             else:
                 # Binary operator formatting
                 if len(arg_values) == 2:
-                    self.etac_code.append(f"{temp_var} = {arg_values[0]} {operator} {arg_values[1]}")
+                    
+                    if return_type == 'bool':
+                        self.etac_code.append(f"{temp_var}: bool = {arg_values[0]} {operator} {arg_values[1]}")
+                    elif return_type == 'float':
+                        self.etac_code.append(f"{temp_var}: f64 = {arg_values[0]} {operator} {arg_values[1]}")
+                    elif return_type == 'int':
+                        self.etac_code.append(f"{temp_var}: i32 = {arg_values[0]} {operator} {arg_values[1]}")
                 else:
                     raise Exception(f"Invalid arguments for {function_name}")
         else:
